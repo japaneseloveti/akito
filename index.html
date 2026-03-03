@@ -2,7 +2,6 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>2D格闘ゲーム</title>
 <style>
 body {
@@ -18,6 +17,7 @@ canvas {
 </style>
 </head>
 <body>
+
 <canvas id="game" width="800" height="400"></canvas>
 
 <script>
@@ -25,9 +25,16 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 const gravity = 0.5;
+const keys = {};
+const projectiles = [];
 
+let gameOver = false;
+
+// =====================
+// キャラ
+// =====================
 class Fighter {
-  constructor(x, color) {
+  constructor(x, color, isPlayer1 = true) {
     this.x = x;
     this.y = 300;
     this.vx = 0;
@@ -37,21 +44,31 @@ class Fighter {
     this.color = color;
     this.health = 100;
     this.attacking = false;
+    this.facing = isPlayer1 ? 1 : -1;
+    this.hit = false;
   }
 
   draw() {
     ctx.fillStyle = this.color;
     ctx.fillRect(this.x, this.y, this.width, this.height);
 
+    // 攻撃
     if (this.attacking) {
       ctx.fillStyle = "yellow";
-      ctx.fillRect(this.x + this.width, this.y + 20, 30, 20);
+      const attackX = this.facing === 1
+        ? this.x + this.width
+        : this.x - 30;
+      ctx.fillRect(attackX, this.y + 20, 30, 20);
     }
   }
 
   update() {
     this.x += this.vx;
     this.y += this.vy;
+
+    if (this.vx !== 0) {
+      this.facing = this.vx > 0 ? 1 : -1;
+    }
 
     if (this.y + this.height < canvas.height) {
       this.vy += gravity;
@@ -65,38 +82,101 @@ class Fighter {
 
   attack() {
     this.attacking = true;
+    this.hit = false;
     setTimeout(() => {
       this.attacking = false;
     }, 200);
   }
 }
 
-const player1 = new Fighter(100, "cyan");
-const player2 = new Fighter(600, "red");
+// =====================
+// 波動拳
+// =====================
+class Projectile {
+  constructor(x, y, direction, color) {
+    this.x = x;
+    this.y = y;
+    this.radius = 5;
+    this.speed = 7 * direction;
+    this.color = color;
+  }
 
-const keys = {};
+  update() {
+    this.x += this.speed;
+    this.draw();
+  }
 
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// =====================
+// インスタンス
+// =====================
+const player1 = new Fighter(100, "cyan", true);
+const player2 = new Fighter(600, "red", false);
+
+// =====================
+// 入力
+// =====================
 window.addEventListener("keydown", (e) => {
   keys[e.key] = true;
 
   if (e.key === "f") player1.attack();
   if (e.key === "l") player2.attack();
+
+  // 波動拳
+  if (e.key === "g") {
+    projectiles.push(new Projectile(
+      player1.x + player1.width,
+      player1.y + 40,
+      player1.facing,
+      "cyan"
+    ));
+  }
+
+  if (e.key === "k") {
+    projectiles.push(new Projectile(
+      player2.x,
+      player2.y + 40,
+      player2.facing,
+      "red"
+    ));
+  }
 });
 
 window.addEventListener("keyup", (e) => {
   keys[e.key] = false;
 });
 
-function collision(p1, p2) {
+// =====================
+// 攻撃判定
+// =====================
+function attackHit(attacker, target) {
+  if (!attacker.attacking || attacker.hit) return false;
+
+  const attackX = attacker.facing === 1
+    ? attacker.x + attacker.width
+    : attacker.x - 30;
+
   return (
-    p1.x < p2.x + p2.width &&
-    p1.x + p1.width > p2.x &&
-    p1.y < p2.y + p2.height &&
-    p1.y + p1.height > p2.y
+    attackX < target.x + target.width &&
+    attackX + 30 > target.x &&
+    attacker.y < target.y + target.height &&
+    attacker.y + attacker.height > target.y
   );
 }
 
+// =====================
+// メインループ
+// =====================
 function gameLoop() {
+  if (gameOver) return;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // 操作
@@ -113,48 +193,75 @@ function gameLoop() {
   player1.update();
   player2.update();
 
-  // 攻撃判定
-  if (player1.attacking && collision(player1, player2)) {
-    player2.health -= 1;
-  }
-  if (player2.attacking && collision(player2, player1)) {
-    player1.health -= 1;
+  // 攻撃ヒット
+  if (attackHit(player1, player2)) {
+    player2.health -= 10;
+    player1.hit = true;
   }
 
-  // HP表示
-  ctx.fillStyle = "white";
-  ctx.fillText("P1 HP: " + player1.health, 20, 20);
-  ctx.fillText("P2 HP: " + player2.health, 650, 20);
+  if (attackHit(player2, player1)) {
+    player1.health -= 10;
+    player2.hit = true;
+  }
+
+  // 波動拳
+  projectiles.forEach((p, index) => {
+    p.update();
+
+    if (
+      p.x > player1.x &&
+      p.x < player1.x + player1.width &&
+      p.y > player1.y &&
+      p.y < player1.y + player1.height
+    ) {
+      player1.health -= 5;
+      projectiles.splice(index, 1);
+    }
+
+    if (
+      p.x > player2.x &&
+      p.x < player2.x + player2.width &&
+      p.y > player2.y &&
+      p.y < player2.y + player2.height
+    ) {
+      player2.health -= 5;
+      projectiles.splice(index, 1);
+    }
+  });
+
+  // HPバー
+  ctx.fillStyle = "gray";
+  ctx.fillRect(20, 30, 200, 20);
+  ctx.fillRect(580, 30, 200, 20);
+
+  ctx.fillStyle = "lime";
+  ctx.fillRect(20, 30, player1.health * 2, 20);
+
+  ctx.fillStyle = "red";
+  ctx.fillRect(580 + (200 - player2.health * 2), 30, player2.health * 2, 20);
+
+  // KO判定
+  if (player1.health <= 0 || player2.health <= 0) {
+    gameOver = true;
+
+    ctx.fillStyle = "white";
+    ctx.font = "50px sans-serif";
+    ctx.fillText("KO!", 350, 200);
+
+    ctx.font = "30px sans-serif";
+    if (player1.health <= 0) {
+      ctx.fillText("Player 2 Wins", 300, 250);
+    } else {
+      ctx.fillText("Player 1 Wins", 300, 250);
+    }
+    return;
+  }
 
   requestAnimationFrame(gameLoop);
 }
 
 gameLoop();
 </script>
+
 </body>
 </html>
-// HPバー背景
-ctx.fillStyle = "gray";
-ctx.fillRect(20, 30, 200, 20);
-ctx.fillRect(580, 30, 200, 20);
-
-// HPバー本体
-ctx.fillStyle = "lime";
-ctx.fillRect(20, 30, player1.health * 2, 20);
-
-ctx.fillStyle = "red";
-ctx.fillRect(580 + (200 - player2.health * 2), 30, player2.health * 2, 20);
-if (player1.health <= 0 || player2.health <= 0) {
-  gameOver = true;
-
-  ctx.fillStyle = "white";
-  ctx.font = "50px sans-serif";
-  ctx.fillText("KO!", 350, 200);
-
-  ctx.font = "30px sans-serif";
-  if (player1.health <= 0) {
-    ctx.fillText("Player 2 Wins", 300, 250);
-  } else {
-    ctx.fillText("Player 1 Wins", 300, 250);
-  }
-}
