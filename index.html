@@ -1,81 +1,135 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>自己紹介 - あきと</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-
-    .card {
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      padding: 40px;
-      width: 300px;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-      transition: transform 0.3s ease;
-    }
-
-    .card:hover {
-      transform: translateY(-10px);
-    }
-
-    .name {
-      font-size: 28px;
-      font-weight: bold;
-      margin-bottom: 10px;
-    }
-
-    .subtitle {
-      font-size: 14px;
-      color: #ccc;
-      margin-bottom: 20px;
-    }
-
-    .desc {
-      font-size: 16px;
-      line-height: 1.5;
-    }
-
-    .btn {
-      margin-top: 25px;
-      padding: 10px 20px;
-      border: none;
-      border-radius: 25px;
-      background: #00c6ff;
-      color: white;
-      cursor: pointer;
-      transition: 0.3s;
-    }
-
-    .btn:hover {
-      background: #0072ff;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2D格闘ゲーム</title>
+<style>
+body {
+  margin: 0;
+  background: #111;
+  overflow: hidden;
+}
+canvas {
+  display: block;
+  margin: 0 auto;
+  background: linear-gradient(#222, #555);
+}
+</style>
 </head>
 <body>
+<canvas id="game" width="800" height="400"></canvas>
 
-  <div class="card">
-    <div class="name">あきと</div>
-    <div class="subtitle">Student / Future Creator</div>
-    <div class="desc">
-      はじめまして！あきとです。<br>
-      かっこいいものや新しいことが好きで、日々いろんなことに挑戦しています。
-    </div>
-    <button class="btn">Follow Me</button>
-  </div>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
+const gravity = 0.5;
+
+class Fighter {
+  constructor(x, color) {
+    this.x = x;
+    this.y = 300;
+    this.vx = 0;
+    this.vy = 0;
+    this.width = 50;
+    this.height = 80;
+    this.color = color;
+    this.health = 100;
+    this.attacking = false;
+  }
+
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+
+    if (this.attacking) {
+      ctx.fillStyle = "yellow";
+      ctx.fillRect(this.x + this.width, this.y + 20, 30, 20);
+    }
+  }
+
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+
+    if (this.y + this.height < canvas.height) {
+      this.vy += gravity;
+    } else {
+      this.vy = 0;
+      this.y = canvas.height - this.height;
+    }
+
+    this.draw();
+  }
+
+  attack() {
+    this.attacking = true;
+    setTimeout(() => {
+      this.attacking = false;
+    }, 200);
+  }
+}
+
+const player1 = new Fighter(100, "cyan");
+const player2 = new Fighter(600, "red");
+
+const keys = {};
+
+window.addEventListener("keydown", (e) => {
+  keys[e.key] = true;
+
+  if (e.key === "f") player1.attack();
+  if (e.key === "l") player2.attack();
+});
+
+window.addEventListener("keyup", (e) => {
+  keys[e.key] = false;
+});
+
+function collision(p1, p2) {
+  return (
+    p1.x < p2.x + p2.width &&
+    p1.x + p1.width > p2.x &&
+    p1.y < p2.y + p2.height &&
+    p1.y + p1.height > p2.y
+  );
+}
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 操作
+  player1.vx = 0;
+  if (keys["a"]) player1.vx = -5;
+  if (keys["d"]) player1.vx = 5;
+  if (keys["w"] && player1.vy === 0) player1.vy = -10;
+
+  player2.vx = 0;
+  if (keys["ArrowLeft"]) player2.vx = -5;
+  if (keys["ArrowRight"]) player2.vx = 5;
+  if (keys["ArrowUp"] && player2.vy === 0) player2.vy = -10;
+
+  player1.update();
+  player2.update();
+
+  // 攻撃判定
+  if (player1.attacking && collision(player1, player2)) {
+    player2.health -= 1;
+  }
+  if (player2.attacking && collision(player2, player1)) {
+    player1.health -= 1;
+  }
+
+  // HP表示
+  ctx.fillStyle = "white";
+  ctx.fillText("P1 HP: " + player1.health, 20, 20);
+  ctx.fillText("P2 HP: " + player2.health, 650, 20);
+
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
 </body>
 </html>
-
