@@ -3,15 +3,15 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>スマブラ風ゲーム 完全進化版</title>
+<title>スマブラ風ゲーム 広いステージ版</title>
 <style>
-body { margin:0; background:#111; color:#fff; }
+body { margin:0; background:#111; }
 canvas { display:block; margin:0 auto; }
 </style>
 </head>
 <body>
 
-<canvas id="game" width="800" height="420"></canvas>
+<canvas id="game" width="1000" height="500"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
@@ -22,16 +22,18 @@ const keys = {};
 let projectiles = [];
 let gameOver = false;
 
-// 空中ステージ
+// 広いステージ＋地面あり
 const platforms = [
-  {x:150,y:260,w:180,h:12},
-  {x:470,y:260,w:180,h:12},
-  {x:320,y:180,w:160,h:12},
+  {x:0,y:420,w:1000,h:80},
+  {x:200,y:300,w:200,h:12},
+  {x:600,y:300,w:200,h:12},
+  {x:400,y:200,w:200,h:12},
 ];
 
 function drawStage(){
   ctx.fillStyle="#203a43";
-  ctx.fillRect(0,0,800,420);
+  ctx.fillRect(0,0,1000,500);
+
   ctx.fillStyle="#aaa";
   platforms.forEach(p=>ctx.fillRect(p.x,p.y,p.w,p.h));
 }
@@ -40,225 +42,5 @@ class Fighter{
   constructor(x,color){
     this.x=x; this.y=100;
     this.vx=0; this.vy=0;
-    this.w=40; this.h=60;
-    this.color=color;
-
-    this.percent=0;
-    this.jumpCount=0;
-    this.facing=1;
-
-    this.guard=false;
-    this.grab=null;
-
-    // スマッシュ用
-    this.charge=0;
-    this.charging=false;
-  }
-
-  draw(){
-    ctx.fillStyle=this.guard?"blue":this.color;
-    ctx.fillRect(this.x,this.y,this.w,this.h);
-
-    if(this.charging){
-      ctx.fillStyle="yellow";
-      ctx.fillRect(this.x,this.y-10,this.charge,5);
-    }
-  }
-
-  update(){
-    this.x+=this.vx;
-    this.y+=this.vy;
-    this.vy+=gravity;
-
-    platforms.forEach(p=>{
-      if(this.y+this.h < p.y &&
-         this.y+this.h+this.vy >= p.y &&
-         this.x+this.w > p.x &&
-         this.x < p.x+p.w){
-        this.y=p.y-this.h;
-        this.vy=0;
-        this.jumpCount=0;
-      }
-    });
-
-    this.draw();
-  }
-
-  jump(){
-    if(this.jumpCount<2){
-      this.vy=-10;
-      this.jumpCount++;
-    }
-  }
-
-  // 復帰技
-  recover(){
-    this.vy=-15;
-  }
-}
-
-class Projectile{
-  constructor(x,y,dir,power,color){
-    this.x=x; this.y=y;
-    this.vx=dir*7;
-    this.power=power;
-    this.color=color;
-  }
-  update(){
-    this.x+=this.vx;
-    ctx.fillStyle=this.color;
-    ctx.fillRect(this.x,this.y,6,6);
-  }
-}
-
-const p1=new Fighter(100,"cyan");
-const p2=new Fighter(600,"red");
-
-// 入力
-window.addEventListener("keydown",e=>{
-  keys[e.key]=true;
-
-  if(e.key==="f"){
-    p1.charging=true;
-  }
-
-  if(e.key==="g"){
-    projectiles.push(new Projectile(p1.x,p1.y,p1.facing,6,"cyan"));
-  }
-
-  if(e.key==="r"){
-    projectiles.push(new Projectile(p1.x,p1.y,p1.facing,12,"orange"));
-  }
-
-  if(e.key==="e"){
-    p1.recover(); // 復帰
-  }
-
-  if(e.key==="t"){
-    if(Math.abs(p1.x-p2.x)<50) p1.grab=p2;
-  }
-
-  if(e.key==="y"){
-    if(p1.grab){
-      p1.grab.vx=10*p1.facing;
-      p1.grab.vy=-8;
-      p1.grab=null;
-    }
-  }
-
-  if(e.key==="Shift"){
-    p1.guard=true;
-  }
-});
-
-window.addEventListener("keyup",e=>{
-  keys[e.key]=false;
-
-  if(e.key==="f"){
-    smashAttack(p1,p2);
-    p1.charging=false;
-    p1.charge=0;
-  }
-
-  if(e.key==="Shift"){
-    p1.guard=false;
-  }
-});
-
-// スマッシュ攻撃
-function smashAttack(a,b){
-  if(Math.abs(a.x-b.x)<60 && !b.guard){
-
-    let power = 5 + b.percent*0.1;
-
-    // 溜め倍率
-    power *= (1 + a.charge/50);
-
-    if(b.percent>=100) power*=1.8;
-
-    b.percent += 10;
-
-    b.vx = power * (a.x<b.x?1:-1);
-    b.vy = -6;
-  }
-}
-
-// 通常攻撃（CPU用）
-function attack(a,b){
-  if(Math.abs(a.x-b.x)<50 && !b.guard){
-    b.percent+=5;
-    let power=5 + b.percent*0.1;
-    if(b.percent>=100) power*=1.8;
-    b.vx=power*(a.x<b.x?1:-1);
-    b.vy=-4;
-  }
-}
-
-// CPU
-function cpu(){
-  p2.vx = p2.x<p1.x?2:-2;
-
-  if(Math.random()<0.02) attack(p2,p1);
-  if(Math.random()<0.01){
-    projectiles.push(new Projectile(p2.x,p2.y,-1,10,"red"));
-  }
-}
-
-// ループ
-function loop(){
-  if(gameOver) return;
-
-  drawStage();
-
-  // チャージ増加
-  if(p1.charging && p1.charge<100){
-    p1.charge += 1;
-  }
-
-  p1.vx=0;
-  if(keys["a"]) p1.vx=-4;
-  if(keys["d"]) p1.vx=4;
-  if(keys["w"]) p1.jump();
-
-  cpu();
-
-  p1.update();
-  p2.update();
-
-  // 弾
-  projectiles.forEach((p,i)=>{
-    p.update();
-
-    if(p.x>p2.x && p.x<p2.x+p2.w &&
-       p.y>p2.y && p.y<p2.y+p2.h){
-
-      if(!p2.guard){
-        p2.percent+=p.power/2;
-        p2.vx=p.power;
-      }
-      projectiles.splice(i,1);
-    }
-  });
-
-  ctx.fillStyle="#fff";
-  ctx.fillText("P1: "+Math.floor(p1.percent)+"%",20,30);
-
-  function out(p){
-    return p.y>canvas.height+100;
-  }
-
-  if(out(p1)||out(p2)){
-    gameOver=true;
-    ctx.fillText(out(p1)?"CPU Wins":"Player Wins",300,200);
-    return;
-  }
-
-  requestAnimationFrame(loop);
-}
-
-loop();
-</script>
-
-</body>
-</html>
+    this.w=40
 ```
