@@ -1,88 +1,83 @@
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>スマブラ風ゲーム 完全進化版</title>
+<style>
+body { margin:0; background:#111; color:#fff; }
+canvas { display:block; margin:0 auto; }
+</style>
+</head>
+<body>
+
+<canvas id="game" width="800" height="420"></canvas>
+
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 const gravity = 0.5;
 const keys = {};
-const projectiles = [];
+let projectiles = [];
 let gameOver = false;
 
-// =====================
-// 空中ステージ（地面なし）
-// =====================
+// 空中ステージ
 const platforms = [
-  {x:150, y:260, w:180, h:12},
-  {x:470, y:260, w:180, h:12},
-  {x:320, y:180, w:160, h:12},
+  {x:150,y:260,w:180,h:12},
+  {x:470,y:260,w:180,h:12},
+  {x:320,y:180,w:160,h:12},
 ];
 
 function drawStage(){
-  const grad = ctx.createLinearGradient(0,0,0,canvas.height);
-  grad.addColorStop(0,'#0f2027');
-  grad.addColorStop(1,'#203a43');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  ctx.fillStyle = '#9aa';
+  ctx.fillStyle="#203a43";
+  ctx.fillRect(0,0,800,420);
+  ctx.fillStyle="#aaa";
   platforms.forEach(p=>ctx.fillRect(p.x,p.y,p.w,p.h));
 }
 
-// =====================
-// キャラ
-// =====================
-class Fighter {
-  constructor(x, color, isPlayer1 = true) {
-    this.x = x; this.y = 100;
-    this.vx = 0; this.vy = 0;
-    this.width = 40; this.height = 60;
-    this.color = color;
+class Fighter{
+  constructor(x,color){
+    this.x=x; this.y=100;
+    this.vx=0; this.vy=0;
+    this.w=40; this.h=60;
+    this.color=color;
 
-    this.percent = 0;
-    this.attacking = false;
-    this.attackCooldown = 0;
+    this.percent=0;
+    this.jumpCount=0;
+    this.facing=1;
 
-    this.facing = isPlayer1 ? 1 : -1;
-    this.hit = false;
+    this.guard=false;
+    this.grab=null;
 
-    this.knockbackX = 0; this.knockbackY = 0;
-    this.jumpCount = 0;
-
-    // 新要素
-    this.guard = false;
-    this.grabTarget = null;
+    // スマッシュ用
+    this.charge=0;
+    this.charging=false;
   }
 
   draw(){
-    ctx.fillStyle = this.guard ? "blue" : this.color;
-    ctx.fillRect(this.x,this.y,this.width,this.height);
+    ctx.fillStyle=this.guard?"blue":this.color;
+    ctx.fillRect(this.x,this.y,this.w,this.h);
 
-    if(this.attacking){
-      ctx.fillStyle = 'yellow';
-      const ax = this.facing===1 ? this.x+this.width : this.x-30;
-      ctx.fillRect(ax,this.y+20,30,20);
+    if(this.charging){
+      ctx.fillStyle="yellow";
+      ctx.fillRect(this.x,this.y-10,this.charge,5);
     }
   }
 
-  physics(){
-    if (this.attackCooldown>0) this.attackCooldown--;
+  update(){
+    this.x+=this.vx;
+    this.y+=this.vy;
+    this.vy+=gravity;
 
-    this.x += this.vx + this.knockbackX;
-    this.y += this.vy + this.knockbackY;
-
-    this.knockbackX *= 0.9;
-    this.knockbackY *= 0.9;
-
-    this.vy += gravity;
-
-    // 足場判定
     platforms.forEach(p=>{
-      if(this.y + this.height < p.y &&
-         this.y + this.height + this.vy >= p.y &&
-         this.x + this.width > p.x &&
-         this.x < p.x + p.w){
-        this.y = p.y - this.height;
-        this.vy = 0;
-        this.jumpCount = 0;
+      if(this.y+this.h < p.y &&
+         this.y+this.h+this.vy >= p.y &&
+         this.x+this.w > p.x &&
+         this.x < p.x+p.w){
+        this.y=p.y-this.h;
+        this.vy=0;
+        this.jumpCount=0;
       }
     });
 
@@ -90,173 +85,171 @@ class Fighter {
   }
 
   jump(){
-    if(this.jumpCount < 2){
-      this.vy = -10;
+    if(this.jumpCount<2){
+      this.vy=-10;
       this.jumpCount++;
     }
   }
 
-  attack(){
-    if(this.attackCooldown>0) return;
-    this.attacking = true;
-    this.hit = false;
-    this.attackCooldown = 25;
-    setTimeout(()=>{ this.attacking=false; },120);
-  }
-
-  // 必殺技（強弾）
-  special(){
-    projectiles.push(new Projectile(
-      this.x,
-      this.y+30,
-      this.facing,
-      "orange",
-      12 // 強い
-    ));
-  }
-
-  // 掴み
-  grab(target){
-    if(Math.abs(this.x - target.x) < 50){
-      this.grabTarget = target;
-    }
-  }
-
-  // 投げ
-  throw(){
-    if(this.grabTarget){
-      const t = this.grabTarget;
-      t.knockbackX = 10 * this.facing;
-      t.knockbackY = -8;
-      this.grabTarget = null;
-    }
+  // 復帰技
+  recover(){
+    this.vy=-15;
   }
 }
 
-// =====================
-// 弾
-// =====================
 class Projectile{
-  constructor(x,y,dir,color,power=6){
+  constructor(x,y,dir,power,color){
     this.x=x; this.y=y;
-    this.r=5;
-    this.vx=7*dir;
+    this.vx=dir*7;
+    this.power=power;
     this.color=color;
-    this.power = power;
   }
   update(){
     this.x+=this.vx;
     ctx.fillStyle=this.color;
-    ctx.beginPath();
-    ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
-    ctx.fill();
+    ctx.fillRect(this.x,this.y,6,6);
   }
 }
 
-const p1 = new Fighter(100,'cyan',true);
-const p2 = new Fighter(600,'red',false);
+const p1=new Fighter(100,"cyan");
+const p2=new Fighter(600,"red");
 
-// =====================
 // 入力
-// =====================
-window.addEventListener('keydown',e=>{
+window.addEventListener("keydown",e=>{
   keys[e.key]=true;
 
-  if(e.key==='f') p1.attack();
-  if(e.key==='g') projectiles.push(new Projectile(p1.x,p1.y+30,p1.facing,'cyan'));
-  if(e.key==='r') p1.special(); // 必殺
-  if(e.key==='t') p1.grab(p2);  // 掴み
-  if(e.key==='y') p1.throw();   // 投げ
-  if(e.key==='shift') p1.guard = true; // ガード
+  if(e.key==="f"){
+    p1.charging=true;
+  }
+
+  if(e.key==="g"){
+    projectiles.push(new Projectile(p1.x,p1.y,p1.facing,6,"cyan"));
+  }
+
+  if(e.key==="r"){
+    projectiles.push(new Projectile(p1.x,p1.y,p1.facing,12,"orange"));
+  }
+
+  if(e.key==="e"){
+    p1.recover(); // 復帰
+  }
+
+  if(e.key==="t"){
+    if(Math.abs(p1.x-p2.x)<50) p1.grab=p2;
+  }
+
+  if(e.key==="y"){
+    if(p1.grab){
+      p1.grab.vx=10*p1.facing;
+      p1.grab.vy=-8;
+      p1.grab=null;
+    }
+  }
+
+  if(e.key==="Shift"){
+    p1.guard=true;
+  }
 });
-window.addEventListener('keyup',e=>{
+
+window.addEventListener("keyup",e=>{
   keys[e.key]=false;
-  if(e.key==='shift') p1.guard = false;
+
+  if(e.key==="f"){
+    smashAttack(p1,p2);
+    p1.charging=false;
+    p1.charge=0;
+  }
+
+  if(e.key==="Shift"){
+    p1.guard=false;
+  }
 });
 
-// =====================
-// 当たり判定
-// =====================
-function hit(a,b){
-  if(!a.attacking || a.hit) return false;
-  const ax = a.facing===1 ? a.x+a.width : a.x-30;
-  return ax < b.x+b.width && ax+30 > b.x &&
-         a.y < b.y+b.height && a.y+a.height > b.y;
+// スマッシュ攻撃
+function smashAttack(a,b){
+  if(Math.abs(a.x-b.x)<60 && !b.guard){
+
+    let power = 5 + b.percent*0.1;
+
+    // 溜め倍率
+    power *= (1 + a.charge/50);
+
+    if(b.percent>=100) power*=1.8;
+
+    b.percent += 10;
+
+    b.vx = power * (a.x<b.x?1:-1);
+    b.vy = -6;
+  }
 }
 
-// =====================
+// 通常攻撃（CPU用）
+function attack(a,b){
+  if(Math.abs(a.x-b.x)<50 && !b.guard){
+    b.percent+=5;
+    let power=5 + b.percent*0.1;
+    if(b.percent>=100) power*=1.8;
+    b.vx=power*(a.x<b.x?1:-1);
+    b.vy=-4;
+  }
+}
+
 // CPU
-// =====================
 function cpu(){
-  const d = p1.x - p2.x;
-  p2.vx = d>0?2:-2;
+  p2.vx = p2.x<p1.x?2:-2;
 
-  if(Math.random()<0.02) p2.attack();
-  if(Math.random()<0.01) p2.special();
+  if(Math.random()<0.02) attack(p2,p1);
+  if(Math.random()<0.01){
+    projectiles.push(new Projectile(p2.x,p2.y,-1,10,"red"));
+  }
 }
 
-// =====================
 // ループ
-// =====================
 function loop(){
   if(gameOver) return;
 
   drawStage();
 
-  // 操作
+  // チャージ増加
+  if(p1.charging && p1.charge<100){
+    p1.charge += 1;
+  }
+
   p1.vx=0;
-  if(keys['a']) p1.vx=-4;
-  if(keys['d']) p1.vx=4;
-  if(keys['w']) p1.jump();
+  if(keys["a"]) p1.vx=-4;
+  if(keys["d"]) p1.vx=4;
+  if(keys["w"]) p1.jump();
 
   cpu();
 
-  p1.physics();
-  p2.physics();
-
-  // 近接
-  if(hit(p1,p2)){
-    if(!p2.guard){
-      p2.percent += 5;
-
-      // ★100%以上で吹っ飛び強化
-      let power = 5 + p2.percent*0.1;
-      if(p2.percent >= 100) power *= 1.8;
-
-      p2.knockbackX = power * p1.facing;
-      p2.knockbackY = -4 - p2.percent*0.05;
-    }
-    p1.hit = true;
-  }
+  p1.update();
+  p2.update();
 
   // 弾
   projectiles.forEach((p,i)=>{
     p.update();
 
-    if(p.x>p2.x && p.x<p2.x+p2.width &&
-       p.y>p2.y && p.y<p2.y+p2.height){
+    if(p.x>p2.x && p.x<p2.x+p2.w &&
+       p.y>p2.y && p.y<p2.y+p2.h){
 
       if(!p2.guard){
-        p2.percent += p.power/2;
-        p2.knockbackX = p.power * Math.sign(p.vx);
+        p2.percent+=p.power/2;
+        p2.vx=p.power;
       }
       projectiles.splice(i,1);
     }
   });
 
-  // UI
-  ctx.fillStyle='#fff';
-  ctx.fillText('P1: '+Math.floor(p1.percent)+'%', 20, 30);
+  ctx.fillStyle="#fff";
+  ctx.fillText("P1: "+Math.floor(p1.percent)+"%",20,30);
 
-  // 場外＝即負け
   function out(p){
-    return p.x<-100 || p.x>canvas.width+100 || p.y>canvas.height+100;
+    return p.y>canvas.height+100;
   }
 
   if(out(p1)||out(p2)){
     gameOver=true;
-    ctx.font='40px sans-serif';
-    ctx.fillText(out(p1)?'CPU Wins':'Player Wins', 250, 200);
+    ctx.fillText(out(p1)?"CPU Wins":"Player Wins",300,200);
     return;
   }
 
@@ -265,3 +258,7 @@ function loop(){
 
 loop();
 </script>
+
+</body>
+</html>
+```
